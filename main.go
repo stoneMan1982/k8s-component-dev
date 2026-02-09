@@ -5,17 +5,22 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // 注解：当 ConfigMap 有这个 annotation 时，会自动同步到 Secret
@@ -25,6 +30,58 @@ const syncAnnotation = "simple-controller/sync-to-secret"
 type ConfigMapReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
+
+func makeLabelSelector() labels.Selector {
+	sel, _ := labels.Parse("app.kubernetes.io/managed-by=simple-controller")
+	return sel
+}
+
+func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	pred := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			cm, ok := e.Object.(*corev1.ConfigMap)
+			if !ok {
+				return false
+			}
+			_, exists := cm.Annotations[syncAnnotation]
+			return exists
+		},
+
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldCm, ok1 := e.ObjectOld.(*corev1.ConfigMap)
+			newCm, ok2 := e.ObjectNew.(*corev1.ConfigMap)
+			if !ok1 || !ok2 {
+				return false
+			}
+
+			_, oldExists := oldCm.Annotations[syncAnnotation]
+			_, newExists := newCm.Annotations[syncAnnotation]
+
+			if oldExists != newExists {
+				return true
+			}
+
+			if newExists && !reflect.DeepEqual(oldCm.Data, newCm.Data) {
+				return true
+			}
+			return false
+		},
+
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			cm, ok := e.Object.(*corev1.ConfigMap)
+			if !ok {
+				return false
+			}
+			_, exists := cm.Annotations[syncAnnotation]
+			return exists
+		},
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&corev1.ConfigMap{}, builder.WithPredicates(pred)).
+		Owns(&corev1.Secret{}).
+		Complete(r)
 }
 
 // Reconcile 是核心调谐逻辑
@@ -118,14 +175,6 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager 注册 Controller
-func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.ConfigMap{}).      // 监听 ConfigMap
-		Owns(&corev1.Secret{}).        // 也监听它创建的 Secret
-		Complete(r)
-}
-
 func main() {
 	var metricsAddr string
 	var namespace string
@@ -139,7 +188,10 @@ func main() {
 
 	// 创建 Manager
 	options := ctrl.Options{
-		Scheme:         runtime.NewScheme(),
+		Scheme: runtime.NewScheme(),
+		Cache: cache.Options{
+			DefaultLabelSelector: makeLabelSelector(),
+		},
 		LeaderElection: false, // 开发时关闭 Leader Election
 	}
 
