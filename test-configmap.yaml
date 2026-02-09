@@ -1,0 +1,23 @@
+# 测试用 ConfigMap
+# 带有 sync annotation，Controller 会自动创建对应的 Secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-app-config
+  annotations:
+    simple-controller/sync-to-secret: "true"  # 这个 annotation 触发同步
+data:
+  DB_HOST: "localhost"
+  DB_PORT: "5432"
+  DB_USER: "myapp"
+  DB_PASSWORD: "supersecret123"
+  API_KEY: "sk-xxxx-yyyy-zzzz"
+---
+# 没有 annotation 的 ConfigMap，不会被同步
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: normal-config
+data:
+  LOG_LEVEL: "info"
+  DEBUG: "false"
