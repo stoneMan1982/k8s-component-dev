@@ -1,8 +1,8 @@
 package main
 
 import (
-	"custom-deployment-controller/appsv1alpha1"
-	"custom-deployment-controller/controller"
+	"custom-deployment-controller/api/appsv1alpha1"
+	"custom-deployment-controller/internal/controller"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"

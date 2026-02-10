@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"custom-deployment-controller/appsv1alpha1"
+	"custom-deployment-controller/api/appsv1alpha1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
