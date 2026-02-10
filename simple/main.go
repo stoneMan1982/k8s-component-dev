@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +27,8 @@ import (
 // 注解：当 ConfigMap 有这个 annotation 时，会自动同步到 Secret
 const syncAnnotation = "simple-controller/sync-to-secret"
 
+const finalizerName = "simple-controller/finalizer"
+
 // ConfigMapReconciler 监听 ConfigMap 变化
 type ConfigMapReconciler struct {
 	client.Client
@@ -35,6 +38,16 @@ type ConfigMapReconciler struct {
 func makeLabelSelector() labels.Selector {
 	sel, _ := labels.Parse("app.kubernetes.io/managed-by=simple-controller")
 	return sel
+}
+
+func containsFinalizer(list []string, v string) bool {
+	return slices.Contains(list, v)
+}
+
+func removeFinalizer(list []string, v string) []string {
+	return slices.DeleteFunc(list, func(s string) bool {
+		return s == v
+	})
 }
 
 func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -228,11 +241,11 @@ func main() {
 ╔══════════════════════════════════════════════════════════════╗
 ║           Simple ConfigMap-to-Secret Controller              ║
 ╠══════════════════════════════════════════════════════════════╣
-║  监听带有 annotation 的 ConfigMap，自动同步到 Secret          ║
+║  监听带有 annotation 的 ConfigMap，自动同步到 Secret           ║
 ║                                                              ║
 ║  Annotation: simple-controller/sync-to-secret                ║
 ║                                                              ║
-║  测试方法:                                                   ║
+║  测试方法:                                                    ║
 ║  kubectl create configmap test-cm \                          ║
 ║    --from-literal=username=admin \                           ║
 ║    --from-literal=password=secret123                         ║

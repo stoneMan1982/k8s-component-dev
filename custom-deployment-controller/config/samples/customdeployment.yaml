@@ -1,0 +1,6 @@
+apiVersion: apps.myorg.io/v1alpha1
+kind: CustomDeployment
+metadata:
+  name: demo-deploy
+spec:
+  replicas: 2
